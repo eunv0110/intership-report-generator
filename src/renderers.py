@@ -1,4 +1,4 @@
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 
 class NotionBlockRenderer:
@@ -54,17 +54,22 @@ class NotionBlockRenderer:
         return text
 
     @staticmethod
-    def render_blocks(blocks: List[Dict[str, Any]], indent: int = 0) -> None:
-        """블록 트리를 콘솔에 출력"""
+    def render_blocks(blocks: List[Dict[str, Any]], indent: int = 0) -> str:
+        """블록 트리를 문자열로 렌더링 (출력 대신 반환)"""
+        result = []
         for block in blocks:
             line = NotionBlockRenderer.block_to_text(block)
             if line.strip():
-                print(" " * indent + line)
+                result.append(" " * indent + line)
 
             # 자식 블록 재귀 렌더링
             children = block.get("children", [])
             if children:
-                NotionBlockRenderer.render_blocks(children, indent + 2)
+                child_content = NotionBlockRenderer.render_blocks(children, indent + 2)
+                if child_content:
+                    result.append(child_content)
+
+        return "\n".join(result)
 
 
 class NotionPageFormatter:
@@ -99,6 +104,14 @@ class NotionPageFormatter:
             return prop["phone_number"]
 
         return ""
+
+    @staticmethod
+    def get_page_date(properties: Dict[str, Any]) -> Optional[str]:
+        """페이지에서 날짜 속성 찾기"""
+        for prop_name, prop in properties.items():
+            if prop.get("type") == "date" and prop.get("date"):
+                return prop["date"]["start"]
+        return None
 
     @staticmethod
     def format_page_properties(properties: Dict[str, Any]) -> Dict[str, str]:

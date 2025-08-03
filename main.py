@@ -2,6 +2,10 @@ from src.config import NotionConfig
 from src.client import NotionClient
 from src.exceptions import NotionAPIError
 from src.renderers import NotionBlockRenderer, NotionPageFormatter
+from src.weekly_manager import WeeklyManager
+from typing import Dict, Any
+
+
 from typing import Dict, Any
 
 
@@ -28,6 +32,40 @@ def print_database_summary(db_info: Dict[str, Any]) -> None:
             print(f"  • {prop_name} ({prop_type})")
 
 
+def interactive_week_selection(weekly_manager: WeeklyManager):
+    """대화형 주차 선택"""
+    available_weeks = weekly_manager.get_available_weeks()
+
+    if not available_weeks:
+        print("📭 선택할 수 있는 주차가 없습니다.")
+        return
+
+    print(f"\n💡 사용 가능한 주차: {', '.join(map(str, available_weeks))}주차")
+
+    while True:
+        try:
+            user_input = input(f"\n보고 싶은 주차를 입력하세요 (종료: q): ").strip()
+
+            if user_input.lower() == "q":
+                print("👋 프로그램을 종료합니다.")
+                break
+
+            week_num = int(user_input)
+
+            if week_num in available_weeks:
+                weekly_manager.print_week_details(week_num)
+            else:
+                print(
+                    f"❌ {week_num}주차는 존재하지 않습니다. 사용 가능한 주차: {', '.join(map(str, available_weeks))}주차"
+                )
+
+        except ValueError:
+            print("❌ 숫자를 입력해주세요.")
+        except KeyboardInterrupt:
+            print("\n\n👋 프로그램을 종료합니다.")
+            break
+
+
 def main():
     """메인 함수"""
     try:
@@ -51,25 +89,16 @@ def main():
             print("📭 페이지가 없습니다.")
             return
 
-        # 각 페이지 처리
-        for i, page in enumerate(pages, 1):
-            NotionPageFormatter.print_page_info(page, i)
+        # 주차별 분석
+        print("\n🗓️  페이지를 주차별로 분석 중...")
+        weekly_manager = WeeklyManager(client)
+        weekly_pages = weekly_manager.analyze_pages_by_week(pages)
 
-            # 페이지 내용 조회 및 출력
-            print("\n📄 본문 내용:")
-            print("-" * 50)
-            try:
-                blocks_tree = client.get_block_tree(page["id"])
-                if blocks_tree:
-                    NotionBlockRenderer.render_blocks(blocks_tree)
-                else:
-                    print("📄 내용이 비어있습니다.")
-            except NotionAPIError as e:
-                print(f"❌ 내용을 가져올 수 없습니다: {e}")
+        # 주차별 요약 출력
+        weekly_manager.print_weekly_summary()
 
-            # 페이지 간 구분
-            if i < len(pages):
-                print("\n" + "=" * 80 + "\n")
+        # 대화형 주차 선택
+        interactive_week_selection(weekly_manager)
 
     except NotionAPIError as e:
         print(f"❌ Notion API 에러: {e}")
