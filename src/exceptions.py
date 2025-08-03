@@ -1,3 +1,4 @@
+# src/exceptions.py
 class NotionAPIError(Exception):
     """Notion API 에러 클래스"""
 

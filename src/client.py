@@ -1,15 +1,16 @@
+# src/client.py
 import json
 import requests
 from typing import Optional, List, Dict, Any
 
-from src.config import NotionConfig
+from src.config import APIConfig
 from src.exceptions import NotionAPIError
 
 
 class NotionClient:
     """개선된 Notion API 클라이언트"""
 
-    def __init__(self, config: NotionConfig):
+    def __init__(self, config: APIConfig):
         self.config = config
         self.base_url = "https://api.notion.com/v1"
         self.headers = {
