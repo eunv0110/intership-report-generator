@@ -56,8 +56,9 @@ def interactive_week_selection(weekly_manager: WeeklyManager):
                 print(f"\n📋 {week_num}주차 옵션:")
                 print("1. 상세 내용 보기")
                 print("2. AI 요약 보기")
+                print("3. 보고서 생성 (Word + PDF)")
 
-                choice = input("선택하세요 (1-2): ").strip()
+                choice = input("선택하세요 (1-3): ").strip()
 
                 if choice == "1":
                     weekly_manager.print_week_details(week_num)
@@ -79,6 +80,22 @@ def interactive_week_selection(weekly_manager: WeeklyManager):
                             print(f"{'='*80}")
                             weekly_manager.summarize_week(week_num, summary_type)
                             print("\n" + "-" * 80)
+                    else:
+                        print("❌ AI 요약기가 설정되지 않았습니다.")
+                elif choice == "3":
+                    # 보고서 생성
+                    if weekly_manager.summarizer:
+
+                        report_paths = weekly_manager.generate_week_report(
+                            week_num,
+                        )
+
+                        if report_paths:
+                            print(f"\n📁 생성된 파일:")
+                            if report_paths.get("word"):
+                                print(f"  📄 Word: {report_paths['word']}")
+                            if report_paths.get("pdf"):
+                                print(f"  📄 PDF: {report_paths['pdf']}")
                     else:
                         print("❌ AI 요약기가 설정되지 않았습니다.")
                 else:

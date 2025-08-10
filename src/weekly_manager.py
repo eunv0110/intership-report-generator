@@ -5,7 +5,8 @@ from src.client import NotionClient
 from src.renderers import NotionPageFormatter, NotionBlockRenderer
 from src.date_utils import DateUtils
 from src.exceptions import NotionAPIError
-from src.ai_summarizer import ReportSummarizer  # 추가
+from src.ai_summarizer import ReportSummarizer
+from src.report_generator import WeeklyReportGenerator
 
 
 class WeeklyManager:
@@ -14,7 +15,8 @@ class WeeklyManager:
     def __init__(self, client: NotionClient, summarizer: ReportSummarizer = None):
         self.client = client
         self.weekly_pages = defaultdict(list)  # {week_number: [pages]}
-        self.summarizer = summarizer  # AI 요약기 추가
+        self.summarizer = summarizer
+        self.report_generator = WeeklyReportGenerator()  # 보고서 생성기 추가
 
     def analyze_pages_by_week(
         self, pages: List[Dict[str, Any]]
@@ -183,29 +185,109 @@ class WeeklyManager:
         # 전체 내용을 합쳐서 요약 실행
         combined_content = "\n".join(all_content)
 
-        # 요약 타입에 따라 다른 메서드 호출
-        if summary_type == "weekly":
-            summary = self.summarizer.weekly_summarize(
-                combined_content, format_instruction
-            )
-        elif summary_type == "problem":
-            summary = self.summarizer.problem_summarize(
-                combined_content, format_instruction
-            )
-        elif summary_type == "thoughts":
-            summary = self.summarizer.thoughts_summarize(
-                combined_content, format_instruction
-            )
-        elif summary_type == "plan":
-            summary = self.summarizer.plan_summarize(
-                combined_content, format_instruction
-            )
-        else:
-            summary = self.summarizer.summarize(combined_content, format_instruction)
+        # 내용이 너무 적은 경우 체크
+        if len(combined_content.strip()) < 10:
+            print("❌ 요약할 내용이 충분하지 않습니다.")
+            return ""
 
-        print(f"\n📝 {summary_type.upper()} 요약 결과:")
-        print("-" * 50)
-        print(summary)
+        try:
+            # 요약 타입에 따라 다른 메서드 호출
+            if summary_type == "weekly":
+                summary = self.summarizer.weekly_summarize(
+                    combined_content, format_instruction
+                )
+            elif summary_type == "problem":
+                summary = self.summarizer.problem_summarize(
+                    combined_content, format_instruction
+                )
+            elif summary_type == "thoughts":
+                summary = self.summarizer.thoughts_summarize(
+                    combined_content, format_instruction
+                )
+            elif summary_type == "plan":
+                summary = self.summarizer.plan_summarize(
+                    combined_content, format_instruction
+                )
+            else:
+                summary = self.summarizer.summarize(
+                    combined_content, format_instruction
+                )
+
+            print(f"\n📝 {summary_type.upper()} 요약 결과:")
+            print("-" * 50)
+            print(summary)
+
+            return summary
+
+        except Exception as e:
+            print(f"❌ 요약 중 오류가 발생했습니다: {e}")
+            return ""
+
+    def generate_week_report(
+        self,
+        week_number: int,
+        start_date: str = "2025.07.01",
+        end_date: str = "2025.12.21",
+        student: str = "황은비",
+    ) -> Dict[str, str]:
+        """특정 주차의 보고서 생성 (Word + PDF)"""
+        if not self.summarizer:
+            print("❌ AI 요약기가 설정되지 않았습니다.")
+            return {}
+
+        if week_number not in self.weekly_pages:
+            print(f"❌ {week_number}주차에 해당하는 페이지가 없습니다.")
+            return {}
+
+        print(f"\n📋 {week_number}주차 보고서 생성 중...")
+
+        # 4가지 요약 생성
+        summaries = {}
+        summary_types = ["weekly", "problem", "thoughts", "plan"]
+
+        for summary_type in summary_types:
+            print(f"🤖 {summary_type} 요약 생성 중...")
+            summary = self.summarize_week(week_number, summary_type)
+            summaries[summary_type] = summary
+
+        # 날짜 정보 자동 생성 (제공되지 않은 경우)
+        if not start_date or not end_date:
+            pages = self.weekly_pages[week_number]
+            dates = []
+            for page in pages:
+                page_date = NotionPageFormatter.get_page_date(page["properties"])
+                if page_date:
+                    dates.append(page_date)
+
+            if dates:
+                dates.sort()
+                start_date = start_date or dates[0]
+                end_date = end_date or dates[-1]
+            else:
+                from datetime import datetime, timedelta
+
+                today = datetime.now()
+                start_date = start_date or (today - timedelta(days=6)).strftime(
+                    "%Y년 %m월 %d일"
+                )
+                end_date = end_date or today.strftime("%Y년 %m월 %d일")
+
+        # 보고서 생성
+        try:
+            report_paths = self.report_generator.generate_reports(
+                week_number=week_number,
+                summaries=summaries,
+                start_date=start_date,
+                end_date=end_date,
+                student=student,
+            )
+
+            print(f"✅ {week_number}주차 보고서 생성 완료!")
+            return report_paths
+
+        except Exception as e:
+            print(f"❌ 보고서 생성 중 오류: {e}")
+            return {}
 
     def get_available_weeks(self) -> List[int]:
         """사용 가능한 주차 목록 반환"""

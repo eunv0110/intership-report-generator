@@ -13,7 +13,7 @@ class AISummarizer(ABC):
 
 
 class ReportSummarizer(AISummarizer):
-    def __init__(self, api_key: str, model: str = "gpt-3.5-turbo"):
+    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
         self.api_key = api_key
         self.model = model
         self.base_url = "https://api.openai.com/v1/chat/completions"
