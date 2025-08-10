@@ -44,6 +44,9 @@ def interactive_week_selection(weekly_manager: WeeklyManager):
     while True:
         try:
             user_input = input(f"\n보고 싶은 주차를 입력하세요 (종료: q): ").strip()
+            week_input = input(
+                f"생성할 보고서의 주차를 입력해주세요 (종료: q):"
+            ).strip()
 
             if user_input.lower() == "q":
                 print("👋 프로그램을 종료합니다.")
@@ -53,36 +56,24 @@ def interactive_week_selection(weekly_manager: WeeklyManager):
 
             if week_num in available_weeks:
                 # 상세 보기와 요약 선택 메뉴 추가
-                print(f"\n📋 {week_num}주차 옵션:")
-                print("1. 상세 내용 보기")
-                print("2. AI 요약 보기")
+                print(f"\n📋 {week_num}주차 보고서 생성")
 
-                choice = input("선택하세요 (1-2): ").strip()
+                # 보고서 생성
+                if weekly_manager.summarizer:
 
-                if choice == "1":
-                    weekly_manager.print_week_details(week_num)
-                elif choice == "2":
-                    # 4가지 요약 타입 모두 실행
-                    if weekly_manager.summarizer:
-                        print(f"\n🤖 {week_num}주차 전체 AI 요약 생성 중...")
+                    report_paths = weekly_manager.generate_week_report(
+                        week_num, week_input
+                    )
 
-                        summary_types = [
-                            ("weekly", "주간 요약"),
-                            ("problem", "문제점 분석"),
-                            ("thoughts", "생각 정리"),
-                            ("plan", "계획 요약"),
-                        ]
-
-                        for summary_type, summary_name in summary_types:
-                            print(f"\n{'='*80}")
-                            print(f"📝 {summary_name.upper()} ({summary_type})")
-                            print(f"{'='*80}")
-                            weekly_manager.summarize_week(week_num, summary_type)
-                            print("\n" + "-" * 80)
-                    else:
-                        print("❌ AI 요약기가 설정되지 않았습니다.")
+                    if report_paths:
+                        print(f"\n📁 생성된 파일:")
+                        if report_paths.get("word"):
+                            print(f"  📄 Word: {report_paths['word']}")
+                        if report_paths.get("pdf"):
+                            print(f"  📄 PDF: {report_paths['pdf']}")
                 else:
-                    print("❌ 잘못된 선택입니다.")
+                    print("❌ AI 요약기가 설정되지 않았습니다.")
+
             else:
                 print(
                     f"❌ {week_num}주차는 존재하지 않습니다. 사용 가능한 주차: {', '.join(map(str, available_weeks))}주차"
