@@ -226,6 +226,7 @@ class WeeklyManager:
     def generate_week_report(
         self,
         week_number: int,
+        week_input: int,
         start_date: str = "2025.07.01",
         end_date: str = "2025.12.21",
         student: str = "황은비",
@@ -276,6 +277,7 @@ class WeeklyManager:
         try:
             report_paths = self.report_generator.generate_reports(
                 week_number=week_number,
+                week_input=week_input,
                 summaries=summaries,
                 start_date=start_date,
                 end_date=end_date,
