@@ -12,11 +12,34 @@ from src.report_generator import WeeklyReportGenerator
 class WeeklyManager:
     """주차별 페이지 관리 클래스"""
 
-    def __init__(self, client: NotionClient, summarizer: ReportSummarizer = None):
+    def __init__(
+        self,
+        client: NotionClient,
+        summarizer: ReportSummarizer = None,
+        week_calculation_method: str = "project",
+    ):
+        """
+        Args:
+            client: NotionClient 인스턴스
+            summarizer: ReportSummarizer 인스턴스
+            week_calculation_method: 주차 계산 방식 ("project", "monthly", "iso")
+        """
         self.client = client
         self.weekly_pages = defaultdict(list)  # {week_number: [pages]}
         self.summarizer = summarizer
-        self.report_generator = WeeklyReportGenerator()  # 보고서 생성기 추가
+        self.report_generator = WeeklyReportGenerator()
+        self.week_calculation_method = week_calculation_method
+
+        print(f"📅 주차 계산 방식: {self._get_calculation_method_description()}")
+
+    def _get_calculation_method_description(self) -> str:
+        """주차 계산 방식 설명 반환"""
+        descriptions = {
+            "project": "프로젝트 기준 (연속 주차)",
+            "monthly": "월별 기준 (매월 1주차부터)",
+            "iso": "ISO 8601 기준 (국제 표준)",
+        }
+        return descriptions.get(self.week_calculation_method, "알 수 없음")
 
     def analyze_pages_by_week(
         self, pages: List[Dict[str, Any]]
@@ -28,13 +51,21 @@ class WeeklyManager:
             # 페이지에서 날짜 찾기
             page_date = NotionPageFormatter.get_page_date(page["properties"])
             if page_date:
-                korean_date, week_num = DateUtils.get_date_info(page_date)
+                korean_date, week_num = DateUtils.get_date_info(
+                    page_date, self.week_calculation_method
+                )
+
+                # 주차 요약 정보 가져오기 (프로젝트 기준인 경우에만)
+                week_summary = None
+                if self.week_calculation_method == "project":
+                    week_summary = DateUtils.get_week_summary(week_num)
 
                 # 페이지에 날짜 정보 추가
                 page["_date_info"] = {
                     "original_date": page_date,
                     "korean_date": korean_date,
                     "week_number": week_num,
+                    "week_summary": week_summary,
                 }
 
                 self.weekly_pages[week_num].append(page)
@@ -48,12 +79,20 @@ class WeeklyManager:
             return
 
         print("\n" + "=" * 60)
-        print("📅 주차별 페이지 요약")
+        print(f"📅 주차별 페이지 요약 ({self._get_calculation_method_description()})")
         print("=" * 60)
 
         for week_num in sorted(self.weekly_pages.keys()):
             pages = self.weekly_pages[week_num]
-            print(f"\n🗓️  {week_num}주차 ({len(pages)}개 페이지)")
+
+            # 주차 정보 출력
+            week_info = f"{week_num}주차 ({len(pages)}개 페이지)"
+            if self.week_calculation_method == "project" and pages:
+                week_summary = pages[0]["_date_info"].get("week_summary")
+                if week_summary:
+                    week_info += f" - {week_summary['korean_range']}"
+
+            print(f"\n🗓️  {week_info}")
 
             for page in pages[:3]:  # 최대 3개만 미리보기
                 title = (
@@ -78,6 +117,19 @@ class WeeklyManager:
             if len(pages) > 3:
                 print(f"    ... 외 {len(pages) - 3}개")
 
+    def set_week_calculation_method(self, method: str):
+        """주차 계산 방식 변경"""
+        valid_methods = ["project", "monthly", "iso"]
+        if method not in valid_methods:
+            raise ValueError(
+                f"유효하지 않은 계산 방식: {method}. 사용 가능: {valid_methods}"
+            )
+
+        self.week_calculation_method = method
+        print(
+            f"📅 주차 계산 방식이 '{self._get_calculation_method_description()}'로 변경되었습니다."
+        )
+
     def print_week_details(self, week_number: int):
         """특정 주차의 상세 정보 출력"""
         if week_number not in self.weekly_pages:
@@ -85,8 +137,16 @@ class WeeklyManager:
             return
 
         pages = self.weekly_pages[week_number]
+
+        # 주차 정보 헤더
+        header_info = f"{week_number}주차 상세 정보 ({len(pages)}개 페이지)"
+        if self.week_calculation_method == "project" and pages:
+            week_summary = pages[0]["_date_info"].get("week_summary")
+            if week_summary:
+                header_info += f"\n📅 기간: {week_summary['korean_range']}"
+
         print(f"\n" + "=" * 60)
-        print(f"📋 {week_number}주차 상세 정보 ({len(pages)}개 페이지)")
+        print(f"📋 {header_info}")
         print("=" * 60)
 
         for i, page in enumerate(pages, 1):
@@ -140,8 +200,16 @@ class WeeklyManager:
             return
 
         pages = self.weekly_pages[week_number]
+
+        # 주차 정보 헤더
+        header_info = f"{week_number}주차 AI 요약 ({len(pages)}개 페이지)"
+        if self.week_calculation_method == "project" and pages:
+            week_summary = pages[0]["_date_info"].get("week_summary")
+            if week_summary:
+                header_info += f"\n📅 기간: {week_summary['korean_range']}"
+
         print(f"\n" + "=" * 60)
-        print(f"🤖 {week_number}주차 AI 요약 ({len(pages)}개 페이지)")
+        print(f"🤖 {header_info}")
         print("=" * 60)
 
         # 모든 페이지 내용을 하나의 텍스트로 합치기
@@ -227,8 +295,8 @@ class WeeklyManager:
         self,
         week_number: int,
         week_input: int,
-        start_date: str = "2025.07.01",
-        end_date: str = "2025.12.21",
+        start_date: str = None,
+        end_date: str = None,
         student: str = "황은비",
     ) -> Dict[str, str]:
         """특정 주차의 보고서 생성 (Word + PDF)"""
@@ -251,27 +319,39 @@ class WeeklyManager:
             summary = self.summarize_week(week_number, summary_type)
             summaries[summary_type] = summary
 
-        # 날짜 정보 자동 생성 (제공되지 않은 경우)
+        # 날짜 정보 자동 생성
         if not start_date or not end_date:
             pages = self.weekly_pages[week_number]
-            dates = []
-            for page in pages:
-                page_date = NotionPageFormatter.get_page_date(page["properties"])
-                if page_date:
-                    dates.append(page_date)
 
-            if dates:
-                dates.sort()
-                start_date = start_date or dates[0]
-                end_date = end_date or dates[-1]
-            else:
-                from datetime import datetime, timedelta
+            # 프로젝트 기준 주차인 경우 주차 요약에서 날짜 가져오기
+            if self.week_calculation_method == "project" and pages:
+                week_summary = pages[0]["_date_info"].get("week_summary")
+                if week_summary:
+                    start_date = start_date or week_summary["start_date"].strftime(
+                        "%Y.%m.%d"
+                    )
+                    end_date = end_date or week_summary["end_date"].strftime("%Y.%m.%d")
 
-                today = datetime.now()
-                start_date = start_date or (today - timedelta(days=6)).strftime(
-                    "%Y년 %m월 %d일"
-                )
-                end_date = end_date or today.strftime("%Y년 %m월 %d일")
+            # 그 외의 경우 페이지 날짜에서 추출
+            if not start_date or not end_date:
+                dates = []
+                for page in pages:
+                    page_date = NotionPageFormatter.get_page_date(page["properties"])
+                    if page_date:
+                        dates.append(page_date)
+
+                if dates:
+                    dates.sort()
+                    start_date = start_date or dates[0]
+                    end_date = end_date or dates[-1]
+                else:
+                    from datetime import datetime, timedelta
+
+                    today = datetime.now()
+                    start_date = start_date or (today - timedelta(days=6)).strftime(
+                        "%Y.%m.%d"
+                    )
+                    end_date = end_date or today.strftime("%Y.%m.%d")
 
         # 보고서 생성
         try:
@@ -294,3 +374,16 @@ class WeeklyManager:
     def get_available_weeks(self) -> List[int]:
         """사용 가능한 주차 목록 반환"""
         return sorted(self.weekly_pages.keys())
+
+    def print_calculation_method_info(self):
+        """현재 주차 계산 방식 정보 출력"""
+        print(f"\n📅 현재 주차 계산 방식: {self._get_calculation_method_description()}")
+
+        if self.week_calculation_method == "project":
+            print(f"📍 프로젝트 시작일: {DateUtils.PROJECT_START_DATE}")
+            current_week = DateUtils.get_current_project_week()
+            print(f"🗓️  현재 프로젝트 주차: {current_week}주차")
+
+            week_summary = DateUtils.get_week_summary(current_week)
+            if week_summary["start_date"]:
+                print(f"📅 현재 주차 범위: {week_summary['korean_range']}")
